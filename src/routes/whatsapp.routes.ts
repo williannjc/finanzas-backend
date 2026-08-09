@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { env } from "../config/env";
+import { analizarMensaje } from "../services/openai.service";
 
 const router = Router();
 
@@ -52,6 +53,13 @@ router.post("/webhook", async (req: Request, res: Response) => {
       const text = message.text?.body;
 
       console.log("💬 Mensaje:", text);
+
+      if (text) {
+        const analisis = await analizarMensaje(text);
+
+        console.log("🤖 Análisis de OpenAI:");
+        console.log(analisis);
+      }
     }
 
     console.log("===================================");
