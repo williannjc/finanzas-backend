@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { env } from "../config/env";
 import { analizarMensaje } from "../services/openai.service";
+import { obtenerOCrearUsuario } from "../services/user.service";
 
 const router = Router();
 
@@ -47,6 +48,10 @@ router.post("/webhook", async (req: Request, res: Response) => {
 
     console.log("📱 Remitente:", from);
     console.log("📦 Tipo:", messageType);
+
+    const usuario = await obtenerOCrearUsuario(from);
+
+    console.log("👤 Usuario:", usuario);
 
     // Mensaje de texto
     if (messageType === "text") {
