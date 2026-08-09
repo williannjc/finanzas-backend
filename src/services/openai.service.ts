@@ -1,14 +1,14 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { env } from "../config/env";
 
-const openai = new OpenAI({
-  apiKey: env.OPENAI_API_KEY,
+const ai = new GoogleGenAI({
+  apiKey: env.GEMINI_API_KEY,
 });
 
 export async function analizarMensaje(mensaje: string) {
-  const response = await openai.responses.create({
-    model: "gpt-5-mini",
-    instructions: `
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-lite",
+    contents: `
 Eres un asistente de control financiero.
 
 Analiza el mensaje del usuario y determina si contiene un movimiento financiero.
@@ -29,9 +29,11 @@ Reglas:
 - Si no corresponde a ninguna de esas categorías, es "otro".
 - Si no puedes determinar el monto, usa null.
 - No inventes información.
+
+Mensaje del usuario:
+${mensaje}
 `,
-    input: mensaje,
   });
 
-  return response.output_text;
+  return response.text;
 }
