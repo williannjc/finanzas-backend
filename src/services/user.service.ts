@@ -3,7 +3,7 @@ import { supabase } from "../config/supabase";
 export async function obtenerOCrearUsuario(
   whatsappPhone: string
 ) {
-  // 1. Buscar primero el perfil
+  // 1. Buscar perfil por número de WhatsApp
   const { data: existingProfile, error: profileError } =
     await supabase
       .from("profiles")
@@ -15,13 +15,12 @@ export async function obtenerOCrearUsuario(
     throw profileError;
   }
 
-  // Si ya existe el perfil, lo usamos
   if (existingProfile) {
-    console.log("👤 Perfil existente encontrado");
+    console.log("👤 Perfil encontrado por teléfono");
     return existingProfile;
   }
 
-  // 2. Buscar si el usuario ya existe en Auth
+  // 2. Buscar usuario existente en Auth
   const { data: usersData, error: usersError } =
     await supabase.auth.admin.listUsers({
       page: 1,
@@ -36,39 +35,51 @@ export async function obtenerOCrearUsuario(
     (user) => user.phone === whatsappPhone
   );
 
-  let userId: string;
-
-  // 3. Si ya existe en Auth, reutilizamos su ID
-  if (existingAuthUser) {
-    console.log("👤 Usuario de Auth existente encontrado");
-
-    userId = existingAuthUser.id;
-  } else {
-    // 4. Si tampoco existe en Auth, lo creamos
-    console.log("🆕 Creando nuevo usuario de Auth");
-
-    const { data: authData, error: authError } =
-      await supabase.auth.admin.createUser({
-        phone: whatsappPhone,
-        phone_confirm: true,
-        user_metadata: {
-          phone: whatsappPhone,
-        },
-      });
-
-    if (authError) {
-      throw authError;
-    }
-
-    if (!authData.user) {
-      throw new Error("No se pudo crear el usuario");
-    }
-
-    userId = authData.user.id;
+  if (!existingAuthUser) {
+    throw new Error(
+      "No existe un usuario de Auth para este número de WhatsApp"
+    );
   }
 
-  // 5. Crear el perfil utilizando el mismo ID de Auth
-  const { data: profile, error: newProfileError } =
+  const userId = existingAuthUser.id;
+
+  console.log("👤 Usuario de Auth existente encontrado");
+
+  // 3. Buscar el profile utilizando el ID de Auth
+  const { data: profileById, error: profileByIdError } =
+    await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+
+  if (profileByIdError) {
+    throw profileByIdError;
+  }
+
+  // 4. El profile ya existe → actualizarlo
+  if (profileById) {
+    const { data: updatedProfile, error: updateError } =
+      await supabase
+        .from("profiles")
+        .update({
+          phone: whatsappPhone,
+        })
+        .eq("id", userId)
+        .select()
+        .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    console.log("✅ Perfil existente actualizado con WhatsApp");
+
+    return updatedProfile;
+  }
+
+  // 5. Solo si realmente no existe, crearlo
+  const { data: newProfile, error: newProfileError } =
     await supabase
       .from("profiles")
       .insert({
@@ -87,5 +98,5 @@ export async function obtenerOCrearUsuario(
 
   console.log("✅ Perfil creado correctamente");
 
-  return profile;
+  return newProfile;
 }
