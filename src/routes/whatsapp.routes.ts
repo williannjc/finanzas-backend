@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { env } from "../config/env";
 import { analizarMensaje } from "../services/openai.service";
 import { obtenerOCrearUsuario } from "../services/user.service";
+import { obtenerOCrearCuentaPrincipal } from "../services/account.service";
 
 const router = Router();
 
@@ -52,6 +53,10 @@ router.post("/webhook", async (req: Request, res: Response) => {
     const usuario = await obtenerOCrearUsuario(from);
 
     console.log("👤 Usuario:", usuario);
+
+    const cuenta = await obtenerOCrearCuentaPrincipal(usuario.id);
+
+    console.log("💰 Cuenta:", cuenta);
 
     // Mensaje de texto
     if (messageType === "text") {
