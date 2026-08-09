@@ -26,12 +26,43 @@ router.get("/webhook", (req: Request, res: Response) => {
  * Recepción de mensajes
  */
 router.post("/webhook", async (req: Request, res: Response) => {
-
   console.log("========== NUEVO MENSAJE ==========");
-  console.dir(req.body, { depth: null });
-  console.log("===================================");
 
-  return res.sendStatus(200);
+  try {
+    const entry = req.body?.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
+
+    const message = value?.messages?.[0];
+
+    // Si el evento no contiene un mensaje, lo ignoramos
+    if (!message) {
+      console.log("ℹ️ Evento recibido sin mensaje");
+      return res.sendStatus(200);
+    }
+
+    const from = message.from;
+    const messageType = message.type;
+
+    console.log("📱 Remitente:", from);
+    console.log("📦 Tipo:", messageType);
+
+    // Mensaje de texto
+    if (messageType === "text") {
+      const text = message.text?.body;
+
+      console.log("💬 Mensaje:", text);
+    }
+
+    console.log("===================================");
+
+    return res.sendStatus(200);
+
+  } catch (error) {
+    console.error("❌ Error procesando webhook:", error);
+
+    return res.sendStatus(500);
+  }
 });
 
 export default router;
