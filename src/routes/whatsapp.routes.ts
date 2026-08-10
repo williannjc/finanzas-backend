@@ -10,7 +10,12 @@ import { enviarMensajeWhatsApp } from "../services/whatsapp.service";
 
 const router = Router();
 
-async function mensajeYaProcesado(messageId: string): Promise<boolean> {
+/**
+ * Comprueba si un mensaje de WhatsApp ya fue procesado.
+ */
+async function mensajeYaProcesado(
+  messageId: string
+): Promise<boolean> {
   const { data, error } = await supabase
     .from("processed_messages")
     .select("id")
@@ -25,7 +30,7 @@ async function mensajeYaProcesado(messageId: string): Promise<boolean> {
 }
 
 /**
- * Verificación del webhook (Meta)
+ * Verificación del webhook de Meta
  */
 router.get("/webhook", (req: Request, res: Response) => {
   const mode = req.query["hub.mode"];
@@ -61,59 +66,65 @@ router.post("/webhook", async (req: Request, res: Response) => {
 
     const message = value?.messages?.[0];
 
-    // Si Meta envía un evento que no contiene
-    // un mensaje, simplemente lo ignoramos.
+    // Meta también puede enviar eventos que no contienen
+    // mensajes, por ejemplo estados de entrega.
     if (!message) {
       console.log("ℹ️ Evento recibido sin mensaje");
       return res.sendStatus(200);
     }
 
     const from = message.from;
-const messageType = message.type;
-const messageId = message.id;
+    const messageType = message.type;
+    const messageId = message.id;
 
-console.log("📱 Remitente:", from);
-console.log("📦 Tipo:", messageType);
-console.log("🆔 ID del mensaje:", messageId);
-
-// ==========================================
-// EVITAR MENSAJES DUPLICADOS
-// ==========================================
-
-if (!messageId) {
-  console.log("⚠️ El mensaje no tiene ID. Se ignora.");
-  return res.sendStatus(200);
-}
-
-const yaProcesado = await mensajeYaProcesado(messageId);
-
-if (yaProcesado) {
-  console.log("🔁 Mensaje duplicado. Se ignora.");
-  return res.sendStatus(200);
-}
-
-// Registrar inmediatamente el mensaje
-const { error: insertError } = await supabase
-  .from("processed_messages")
-  .insert({
-    message_id: messageId,
-  });
-
-if (insertError) {
-  // Si el mensaje ya fue insertado simultáneamente
-  // por otra petición, no lo procesamos otra vez.
-  if (insertError.code === "23505") {
-    console.log("🔁 Mensaje duplicado detectado por UNIQUE. Se ignora.");
-    return res.sendStatus(200);
-  }
-
-  throw insertError;
-}
-
-console.log("✅ Mensaje nuevo registrado para procesamiento");
+    console.log("📱 Remitente:", from);
+    console.log("📦 Tipo:", messageType);
+    console.log("🆔 ID del mensaje:", messageId);
 
     // ==========================================
-    // 2. OBTENER / CREAR USUARIO
+    // 2. EVITAR MENSAJES DUPLICADOS
+    // ==========================================
+
+    if (!messageId) {
+      console.log("⚠️ El mensaje no tiene ID. Se ignora.");
+      return res.sendStatus(200);
+    }
+
+    const yaProcesado = await mensajeYaProcesado(messageId);
+
+    if (yaProcesado) {
+      console.log("🔁 Mensaje duplicado. Se ignora.");
+      return res.sendStatus(200);
+    }
+
+    // Registramos el ID antes de procesar el mensaje.
+    const { error: insertError } = await supabase
+      .from("processed_messages")
+      .insert({
+        message_id: messageId,
+      });
+
+    if (insertError) {
+      // Si dos peticiones llegaron simultáneamente,
+      // la restricción UNIQUE evita que ambas procesen
+      // el mismo mensaje.
+      if (insertError.code === "23505") {
+        console.log(
+          "🔁 Mensaje duplicado detectado por UNIQUE. Se ignora."
+        );
+
+        return res.sendStatus(200);
+      }
+
+      throw insertError;
+    }
+
+    console.log(
+      "✅ Mensaje nuevo registrado para procesamiento"
+    );
+
+    // ==========================================
+    // 3. OBTENER / CREAR USUARIO
     // ==========================================
 
     const usuario = await obtenerOCrearUsuario(from);
@@ -121,7 +132,7 @@ console.log("✅ Mensaje nuevo registrado para procesamiento");
     console.log("👤 Usuario:", usuario);
 
     // ==========================================
-    // 3. OBTENER / CREAR CUENTA PRINCIPAL
+    // 4. OBTENER / CREAR CUENTA PRINCIPAL
     // ==========================================
 
     const cuenta = await obtenerOCrearCuentaPrincipal(
@@ -131,149 +142,162 @@ console.log("✅ Mensaje nuevo registrado para procesamiento");
     console.log("💰 Cuenta:", cuenta);
 
     // ==========================================
-    // 4. PROCESAR MENSAJE DE TEXTO
+    // 5. PROCESAR MENSAJE DE TEXTO
     // ==========================================
 
-    if (messageType === "text") {
-      const text = message.text?.body;
-
-      console.log("💬 Mensaje:", text);
-
-      if (!text) {
-        console.log("ℹ️ Mensaje de texto vacío");
-        return res.sendStatus(200);
-      }
-
-      // ==========================================
-      // 5. ANALIZAR MENSAJE CON GEMINI
-      // ==========================================
-
-      const analisis = await analizarMensaje(text);
-
-      console.log("🤖 Análisis de IA:");
-      console.dir(analisis, { depth: null });
-
-      // ==========================================
-      // 6. COMPROBAR SI ES UNA TRANSACCIÓN
-      // ==========================================
-
-      if (
-        (analisis.tipo === "gasto" ||
-          analisis.tipo === "ingreso") &&
-        analisis.monto !== null &&
-        analisis.monto > 0
-      ) {
-        // Convertimos nuestro tipo en el enum
-        // utilizado por Supabase.
-        const tipoTransaccion =
-          analisis.tipo === "gasto"
-            ? "expense"
-            : "income";
-
-        // ==========================================
-        // 7. CREAR TRANSACCIÓN
-        // ==========================================
-
-        const transaccion = await crearTransaccion({
-          userId: usuario.id,
-          accountId: cuenta.id,
-          tipo: tipoTransaccion,
-          monto: analisis.monto,
-          categoria: analisis.categoria,
-          descripcion: analisis.descripcion,
-        });
-
-        console.log("💸 Transacción creada:");
-        console.dir(transaccion, { depth: null });
-
-        // ==========================================
-        // 8. OBTENER SALDO ACTUALIZADO
-        // ==========================================
-
-        const { data: cuentaActualizada, error: cuentaError } =
-          await supabase
-            .from("accounts")
-            .select("current_balance")
-            .eq("id", cuenta.id)
-            .single();
-
-        if (cuentaError) {
-          throw cuentaError;
-        }
-
-        // ==========================================
-        // 9. OBTENER NOMBRE REAL DE LA CATEGORÍA
-        // ==========================================
-
-        let nombreCategoria = analisis.categoria || "Otros";
-
-        if (transaccion.category_id) {
-          const { data: categoria } = await supabase
-            .from("categories")
-            .select("name")
-            .eq("id", transaccion.category_id)
-            .single();
-
-          if (categoria?.name) {
-            nombreCategoria = categoria.name;
-          }
-        }
-
-        // ==========================================
-        // 10. CREAR RESPUESTA PARA WHATSAPP
-        // ==========================================
-
-        const saldo = Number(
-          cuentaActualizada.current_balance
-        );
-
-        const monto = Number(analisis.monto);
-
-        let respuesta = "";
-
-        if (tipoTransaccion === "expense") {
-          respuesta =
-            `✅ Gasto registrado\n\n` +
-            `💵 $${monto.toFixed(2)}\n` +
-            `🏷️ ${nombreCategoria}\n` +
-            `💳 ${cuenta.name}\n` +
-            `📊 Saldo actual: $${saldo.toFixed(2)}`;
-        } else {
-          respuesta =
-            `✅ Ingreso registrado\n\n` +
-            `💵 $${monto.toFixed(2)}\n` +
-            `🏷️ ${nombreCategoria}\n` +
-            `💳 ${cuenta.name}\n` +
-            `📊 Saldo actual: $${saldo.toFixed(2)}`;
-        }
-
-        // ==========================================
-        // 11. RESPONDER POR WHATSAPP
-        // ==========================================
-
-        await enviarMensajeWhatsApp(
-          from,
-          respuesta
-        );
-
-        console.log("📤 Respuesta enviada al usuario");
-      } else {
-        // ==========================================
-        // MENSAJE SIN TRANSACCIÓN
-        // ==========================================
-
-        console.log(
-          "ℹ️ El mensaje no corresponde a una transacción."
-        );
-
-        // Por ahora no respondemos automáticamente
-        // a consultas u otros mensajes.
-      }
-    } else {
+    if (messageType !== "text") {
       console.log(
         `ℹ️ Tipo de mensaje no procesado: ${messageType}`
       );
+
+      console.log("===================================");
+
+      return res.sendStatus(200);
     }
+
+    const text = message.text?.body;
+
+    console.log("💬 Mensaje:", text);
+
+    if (!text) {
+      console.log("ℹ️ Mensaje de texto vacío");
+      return res.sendStatus(200);
+    }
+
+    // ==========================================
+    // 6. ANALIZAR MENSAJE CON GEMINI
+    // ==========================================
+
+    const analisis = await analizarMensaje(text);
+
+    console.log("🤖 Análisis de IA:");
+    console.dir(analisis, { depth: null });
+
+    // ==========================================
+    // 7. COMPROBAR SI ES GASTO O INGRESO
+    // ==========================================
+
+    const esTransaccion =
+      (analisis.tipo === "gasto" ||
+        analisis.tipo === "ingreso") &&
+      analisis.monto !== null &&
+      analisis.monto > 0;
+
+    if (!esTransaccion) {
+      console.log(
+        "ℹ️ El mensaje no corresponde a una transacción."
+      );
+
+      console.log("===================================");
+
+      return res.sendStatus(200);
+    }
+
+    // ==========================================
+    // 8. CONVERTIR TIPO DE GEMINI A ENUM DE SUPABASE
+    // ==========================================
+
+    const tipoTransaccion =
+      analisis.tipo === "gasto"
+        ? "expense"
+        : "income";
+
+    console.log(
+      "🔄 Tipo de transacción:",
+      tipoTransaccion
+    );
+
+    // ==========================================
+    // 9. CREAR TRANSACCIÓN
+    // ==========================================
+
+    const transaccion = await crearTransaccion({
+      userId: usuario.id,
+      accountId: cuenta.id,
+      tipo: tipoTransaccion,
+      monto: analisis.monto,
+      categoria: analisis.categoria,
+      descripcion: analisis.descripcion,
+    });
+
+    console.log("💸 Transacción creada:");
+    console.dir(transaccion, { depth: null });
+
+    // ==========================================
+    // 10. OBTENER SALDO ACTUALIZADO
+    // ==========================================
+
+    const {
+      data: cuentaActualizada,
+      error: cuentaError,
+    } = await supabase
+      .from("accounts")
+      .select("current_balance")
+      .eq("id", cuenta.id)
+      .single();
+
+    if (cuentaError) {
+      throw cuentaError;
+    }
+
+    // ==========================================
+    // 11. OBTENER NOMBRE REAL DE LA CATEGORÍA
+    // ==========================================
+
+    let nombreCategoria =
+      analisis.categoria || "Otros";
+
+    if (transaccion.category_id) {
+      const { data: categoria, error: categoriaError } =
+        await supabase
+          .from("categories")
+          .select("name")
+          .eq("id", transaccion.category_id)
+          .single();
+
+      if (!categoriaError && categoria?.name) {
+        nombreCategoria = categoria.name;
+      }
+    }
+
+    // ==========================================
+    // 12. PREPARAR RESPUESTA
+    // ==========================================
+
+    const saldo = Number(
+      cuentaActualizada.current_balance
+    );
+
+    const monto = Number(analisis.monto);
+
+    let respuesta = "";
+
+    if (tipoTransaccion === "expense") {
+      respuesta =
+        `✅ Gasto registrado\n\n` +
+        `💵 $${monto.toFixed(2)}\n` +
+        `🏷️ ${nombreCategoria}\n` +
+        `💳 ${cuenta.name}\n` +
+        `📊 Saldo actual: $${saldo.toFixed(2)}`;
+    } else {
+      respuesta =
+        `✅ Ingreso registrado\n\n` +
+        `💵 +$${monto.toFixed(2)}\n` +
+        `🏷️ ${nombreCategoria}\n` +
+        `💳 ${cuenta.name}\n` +
+        `📊 Saldo actual: $${saldo.toFixed(2)}`;
+    }
+
+    // ==========================================
+    // 13. RESPONDER POR WHATSAPP
+    // ==========================================
+
+    await enviarMensajeWhatsApp(
+      from,
+      respuesta
+    );
+
+    console.log("📤 Respuesta enviada al usuario");
 
     console.log("===================================");
 
