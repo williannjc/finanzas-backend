@@ -1,8 +1,10 @@
 import { Router, Request, Response } from "express";
 import { env } from "../config/env";
+
 import { analizarMensaje } from "../services/openai.service";
 import { obtenerOCrearUsuario } from "../services/user.service";
 import { obtenerOCrearCuentaPrincipal } from "../services/account.service";
+import { crearTransaccion } from "../services/transaction.service";
 
 const router = Router();
 
@@ -50,25 +52,71 @@ router.post("/webhook", async (req: Request, res: Response) => {
     console.log("📱 Remitente:", from);
     console.log("📦 Tipo:", messageType);
 
+    // ==========================================
+    // 1. IDENTIFICAR / CREAR USUARIO
+    // ==========================================
+
     const usuario = await obtenerOCrearUsuario(from);
 
     console.log("👤 Usuario:", usuario);
+
+    // ==========================================
+    // 2. OBTENER / CREAR CUENTA PRINCIPAL
+    // ==========================================
 
     const cuenta = await obtenerOCrearCuentaPrincipal(usuario.id);
 
     console.log("💰 Cuenta:", cuenta);
 
-    // Mensaje de texto
+    // ==========================================
+    // 3. PROCESAR MENSAJE DE TEXTO
+    // ==========================================
+
     if (messageType === "text") {
       const text = message.text?.body;
 
       console.log("💬 Mensaje:", text);
 
       if (text) {
+
+        // Analizar mensaje con IA
         const analisis = await analizarMensaje(text);
 
         console.log("🤖 Análisis de OpenAI:");
         console.log(analisis);
+
+        // ==========================================
+        // 4. SI ES UN INGRESO O GASTO, REGISTRARLO
+        // ==========================================
+
+        if (
+          (analisis.tipo === "gasto" ||
+            analisis.tipo === "ingreso") &&
+          analisis.monto &&
+          analisis.monto > 0
+        ) {
+
+          const tipoTransaccion =
+            analisis.tipo === "gasto"
+              ? "expense"
+              : "income";
+
+          const transaccion = await crearTransaccion({
+            userId: usuario.id,
+            accountId: cuenta.id,
+            tipo: tipoTransaccion,
+            monto: analisis.monto,
+            categoria: analisis.categoria,
+            descripcion: analisis.descripcion,
+          });
+
+          console.log("💸 Transacción creada:");
+          console.dir(transaccion, { depth: null });
+        } else {
+          console.log(
+            "ℹ️ El mensaje no corresponde a una transacción."
+          );
+        }
       }
     }
 
