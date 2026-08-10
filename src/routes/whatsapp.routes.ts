@@ -225,7 +225,56 @@ router.post(
       });
 
       // ========================================================
-      // 9. VALIDAR SI ES UNA TRANSACCIÓN
+      // 9. CONSULTAS FINANCIERAS
+      // ========================================================
+
+      if (analisis.tipo === "consulta") {
+        console.log(
+          "🔎 Consulta financiera detectada"
+        );
+
+        // Obtener saldo actualizado directamente
+        // desde Supabase.
+        const {
+          data: cuentaActualizada,
+          error: cuentaError,
+        } = await supabase
+          .from("accounts")
+          .select("name, current_balance")
+          .eq("id", cuenta.id)
+          .single();
+
+        if (cuentaError) {
+          throw cuentaError;
+        }
+
+        const saldo = Number(
+          cuentaActualizada.current_balance
+        );
+
+        const respuesta =
+          `💰 *Tu saldo actual*\n\n` +
+          `💵 $${saldo.toFixed(2)}\n` +
+          `💳 ${cuentaActualizada.name}`;
+
+        await enviarMensajeWhatsApp(
+          from,
+          respuesta
+        );
+
+        console.log(
+          "📤 Respuesta de consulta enviada"
+        );
+
+        console.log(
+          "==================================="
+        );
+
+        return res.sendStatus(200);
+      }
+
+      // ========================================================
+      // 10. VALIDAR SI ES UNA TRANSACCIÓN
       // ========================================================
 
       const esGasto =
@@ -235,22 +284,12 @@ router.post(
         analisis.tipo === "ingreso";
 
       /**
-       * IMPORTANTE:
-       *
-       * Guardamos monto en una constante y comprobamos
-       * explícitamente que NO sea null.
-       *
-       * Después de este if, TypeScript sabe que monto
-       * es un number.
+       * Si no es gasto, ingreso ni consulta,
+       * simplemente ignoramos el mensaje.
        */
-      const monto = analisis.monto;
-
-      if (
-        !esGasto &&
-        !esIngreso
-      ) {
+      if (!esGasto && !esIngreso) {
         console.log(
-          "ℹ️ El mensaje no corresponde a una transacción."
+          "ℹ️ El mensaje no corresponde a una transacción ni consulta."
         );
 
         console.log(
@@ -259,6 +298,12 @@ router.post(
 
         return res.sendStatus(200);
       }
+
+      // ========================================================
+      // 11. VALIDAR MONTO
+      // ========================================================
+
+      const monto = analisis.monto;
 
       if (
         monto === null ||
@@ -277,7 +322,7 @@ router.post(
       }
 
       // ========================================================
-      // 10. CONVERTIR TIPO GEMINI -> ENUM SUPABASE
+      // 12. CONVERTIR TIPO GEMINI -> ENUM SUPABASE
       // ========================================================
 
       const tipoTransaccion:
@@ -288,7 +333,7 @@ router.post(
           : "income";
 
       // ========================================================
-      // 11. CREAR TRANSACCIÓN
+      // 13. CREAR TRANSACCIÓN
       // ========================================================
 
       const transaccion =
@@ -312,7 +357,7 @@ router.post(
       });
 
       // ========================================================
-      // 12. OBTENER SALDO ACTUALIZADO
+      // 14. OBTENER SALDO ACTUALIZADO
       // ========================================================
 
       const {
@@ -320,13 +365,8 @@ router.post(
         error: cuentaError,
       } = await supabase
         .from("accounts")
-        .select(
-          "current_balance"
-        )
-        .eq(
-          "id",
-          cuenta.id
-        )
+        .select("current_balance")
+        .eq("id", cuenta.id)
         .single();
 
       if (cuentaError) {
@@ -334,7 +374,7 @@ router.post(
       }
 
       // ========================================================
-      // 13. OBTENER NOMBRE REAL DE LA CATEGORÍA
+      // 15. OBTENER NOMBRE REAL DE LA CATEGORÍA
       // ========================================================
 
       let nombreCategoria =
@@ -362,7 +402,7 @@ router.post(
       }
 
       // ========================================================
-      // 14. SALDO Y MONTO
+      // 16. SALDO Y MONTO
       // ========================================================
 
       const saldo =
@@ -374,7 +414,7 @@ router.post(
         Number(monto);
 
       // ========================================================
-      // 15. CREAR RESPUESTA PARA WHATSAPP
+      // 17. CREAR RESPUESTA PARA WHATSAPP
       // ========================================================
 
       let respuesta = "";
@@ -399,7 +439,7 @@ router.post(
       }
 
       // ========================================================
-      // 16. ENVIAR RESPUESTA POR WHATSAPP
+      // 18. ENVIAR RESPUESTA POR WHATSAPP
       // ========================================================
 
       await enviarMensajeWhatsApp(
@@ -421,7 +461,7 @@ router.post(
       console.error(
         "❌ Error procesando webhook:",
         error?.response?.data ||
-          error
+        error
       );
 
       console.log(
