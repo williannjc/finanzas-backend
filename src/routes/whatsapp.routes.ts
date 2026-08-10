@@ -10,6 +10,20 @@ import { enviarMensajeWhatsApp } from "../services/whatsapp.service";
 
 const router = Router();
 
+async function mensajeYaProcesado(messageId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("processed_messages")
+    .select("id")
+    .eq("message_id", messageId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return !!data;
+}
+
 /**
  * Verificación del webhook (Meta)
  */
@@ -55,10 +69,48 @@ router.post("/webhook", async (req: Request, res: Response) => {
     }
 
     const from = message.from;
-    const messageType = message.type;
+const messageType = message.type;
+const messageId = message.id;
 
-    console.log("📱 Remitente:", from);
-    console.log("📦 Tipo:", messageType);
+console.log("📱 Remitente:", from);
+console.log("📦 Tipo:", messageType);
+console.log("🆔 ID del mensaje:", messageId);
+
+// ==========================================
+// EVITAR MENSAJES DUPLICADOS
+// ==========================================
+
+if (!messageId) {
+  console.log("⚠️ El mensaje no tiene ID. Se ignora.");
+  return res.sendStatus(200);
+}
+
+const yaProcesado = await mensajeYaProcesado(messageId);
+
+if (yaProcesado) {
+  console.log("🔁 Mensaje duplicado. Se ignora.");
+  return res.sendStatus(200);
+}
+
+// Registrar inmediatamente el mensaje
+const { error: insertError } = await supabase
+  .from("processed_messages")
+  .insert({
+    message_id: messageId,
+  });
+
+if (insertError) {
+  // Si el mensaje ya fue insertado simultáneamente
+  // por otra petición, no lo procesamos otra vez.
+  if (insertError.code === "23505") {
+    console.log("🔁 Mensaje duplicado detectado por UNIQUE. Se ignora.");
+    return res.sendStatus(200);
+  }
+
+  throw insertError;
+}
+
+console.log("✅ Mensaje nuevo registrado para procesamiento");
 
     // ==========================================
     // 2. OBTENER / CREAR USUARIO
