@@ -7,6 +7,15 @@ import { obtenerOCrearUsuario } from "../services/user.service";
 import { obtenerOCrearCuentaPrincipal } from "../services/account.service";
 import { crearTransaccion } from "../services/transaction.service";
 import { enviarMensajeWhatsApp } from "../services/whatsapp.service";
+import {
+  obtenerSaldoTotal,
+  obtenerGastosDelDia,
+  obtenerGastosDelMes,
+  obtenerIngresosDelMes,
+  obtenerGastosPorCategoriaNombre,
+  obtenerUltimasTransacciones,
+  obtenerResumenMensual,
+} from "../services/finance.service";
 
 const router = Router();
 
@@ -229,33 +238,18 @@ router.post(
       // ========================================================
 
       if (analisis.tipo === "consulta") {
-        console.log(
-          "🔎 Consulta financiera detectada"
+        console.log("🔎 Consulta financiera detectada");
+
+        const cuentaFinanciera = await obtenerSaldo(
+          cuenta.id
         );
 
-        // Obtener saldo actualizado directamente
-        // desde Supabase.
-        const {
-          data: cuentaActualizada,
-          error: cuentaError,
-        } = await supabase
-          .from("accounts")
-          .select("name, current_balance")
-          .eq("id", cuenta.id)
-          .single();
-
-        if (cuentaError) {
-          throw cuentaError;
-        }
-
-        const saldo = Number(
-          cuentaActualizada.current_balance
-        );
+        const saldo = cuentaFinanciera.balance;
 
         const respuesta =
           `💰 *Tu saldo actual*\n\n` +
           `💵 $${saldo.toFixed(2)}\n` +
-          `💳 ${cuentaActualizada.name}`;
+          `💳 ${cuentaFinanciera.name}`;
 
         await enviarMensajeWhatsApp(
           from,
