@@ -7,14 +7,9 @@ import { obtenerOCrearUsuario } from "../services/user.service";
 import { obtenerOCrearCuentaPrincipal } from "../services/account.service";
 import { crearTransaccion } from "../services/transaction.service";
 import { enviarMensajeWhatsApp } from "../services/whatsapp.service";
+
 import {
   obtenerSaldoTotal,
-  obtenerGastosDelDia,
-  obtenerGastosDelMes,
-  obtenerIngresosDelMes,
-  obtenerGastosPorCategoriaNombre,
-  obtenerUltimasTransacciones,
-  obtenerResumenMensual,
 } from "../services/finance.service";
 
 const router = Router();
@@ -194,7 +189,7 @@ router.post(
       });
 
       // ========================================================
-      // 7. PROCESAR MENSAJE DE TEXTO
+      // 7. PROCESAR SOLO MENSAJES DE TEXTO
       // ========================================================
 
       if (messageType !== "text") {
@@ -238,18 +233,41 @@ router.post(
       // ========================================================
 
       if (analisis.tipo === "consulta") {
-        console.log("🔎 Consulta financiera detectada");
-
-        const cuentaFinanciera = await obtenerSaldo(
-          cuenta.id
+        console.log(
+          "🔎 Consulta financiera detectada"
         );
 
-        const saldo = cuentaFinanciera.balance;
+        /**
+         * Obtenemos el saldo directamente desde
+         * finance.service.ts.
+         *
+         * Esta función suma todas las cuentas
+         * activas del usuario.
+         */
+        const informacionFinanciera =
+          await obtenerSaldoTotal(usuario.id);
+
+        const saldo =
+          Number(informacionFinanciera.saldoTotal);
+
+        /**
+         * Si solo existe una cuenta, mostramos
+         * su nombre. Si existen varias cuentas,
+         * mostramos "Todas las cuentas".
+         */
+        let nombreCuenta = "Todas las cuentas";
+
+        if (
+          informacionFinanciera.cuentas.length === 1
+        ) {
+          nombreCuenta =
+            informacionFinanciera.cuentas[0].name;
+        }
 
         const respuesta =
           `💰 *Tu saldo actual*\n\n` +
           `💵 $${saldo.toFixed(2)}\n` +
-          `💳 ${cuentaFinanciera.name}`;
+          `💳 ${nombreCuenta}`;
 
         await enviarMensajeWhatsApp(
           from,
@@ -380,6 +398,7 @@ router.post(
       ) {
         const {
           data: categoria,
+          error: categoriaError,
         } = await supabase
           .from("categories")
           .select("name")
@@ -388,6 +407,13 @@ router.post(
             transaccion.category_id
           )
           .single();
+
+        if (categoriaError) {
+          console.log(
+            "⚠️ No se pudo obtener el nombre de la categoría:",
+            categoriaError.message
+          );
+        }
 
         if (categoria?.name) {
           nombreCategoria =
