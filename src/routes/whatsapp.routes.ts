@@ -12,6 +12,16 @@ import {
   obtenerSaldoTotal,
 } from "../services/finance.service";
 
+import {
+  obtenerSaldoTotal,
+  obtenerGastosDelDia,
+  obtenerGastosDelMes,
+  obtenerIngresosDelMes,
+  obtenerGastosPorCategoriaNombre,
+  obtenerUltimasTransacciones,
+  obtenerResumenMensual,
+} from "../services/finance.service";
+
 const router = Router();
 
 /**
