@@ -10,10 +10,6 @@ import { enviarMensajeWhatsApp } from "../services/whatsapp.service";
 
 import {
   obtenerSaldoTotal,
-} from "../services/finance.service";
-
-import {
-  obtenerSaldoTotal,
   obtenerGastosDelDia,
   obtenerGastosDelMes,
   obtenerIngresosDelMes,
