@@ -8,6 +8,7 @@ import { obtenerOCrearUsuario } from "../services/user.service";
 import {
   obtenerOCrearCuentaPrincipal,
   crearCuenta,
+  transferirEntreCuentas,
 } from "../services/account.service";
 
 import { crearTransaccion } from "../services/transaction.service";
@@ -299,6 +300,117 @@ router.post(
         return res.sendStatus(200);
       }  
 
+      // ========================================================
+      // TRANSFERENCIAS ENTRE CUENTAS
+      // ========================================================
+
+      if (analisis.intencion === "transfer") {
+        console.log(
+          "💸 Transferencia entre cuentas detectada"
+        );
+
+        // ======================================================
+        // VALIDAR DATOS DE LA TRANSFERENCIA
+        // ======================================================
+
+        if (
+          !analisis.cuentaOrigen ||
+          !analisis.cuentaDestino
+        ) {
+          console.log(
+            "⚠️ Faltan las cuentas de origen o destino."
+          );
+
+          await enviarMensajeWhatsApp(
+            from,
+            `⚠️ Para hacer una transferencia necesito saber la cuenta de origen y la cuenta de destino.\n\n` +
+            `Por ejemplo:\n` +
+            `💸 transferí $20 de Efectivo a Banco Pichincha`
+          );
+
+          return res.sendStatus(200);
+        }
+
+        const montoTransferencia =
+          analisis.monto;
+
+        if (
+          montoTransferencia === null ||
+          !Number.isFinite(montoTransferencia) ||
+          montoTransferencia <= 0
+        ) {
+          console.log(
+            "⚠️ La transferencia no tiene un monto válido."
+          );
+
+          await enviarMensajeWhatsApp(
+            from,
+            `⚠️ No pude determinar un monto válido para la transferencia.`
+          );
+
+          return res.sendStatus(200);
+        }
+
+        // ======================================================
+        // EJECUTAR TRANSFERENCIA
+        // ======================================================
+
+        console.log(
+          `💸 ${analisis.cuentaOrigen} → ${analisis.cuentaDestino}`
+        );
+
+        console.log(
+          `💵 Monto: $${montoTransferencia.toFixed(2)}`
+        );
+
+        const resultado =
+          await transferirEntreCuentas(
+            usuario.id,
+            analisis.cuentaOrigen,
+            analisis.cuentaDestino,
+            montoTransferencia
+          );
+
+        // ======================================================
+        // OBTENER SALDOS ACTUALIZADOS
+        // ======================================================
+
+        const saldoOrigen =
+          Number(
+            resultado.cuentaOrigen.current_balance
+          );
+
+        const saldoDestino =
+          Number(
+            resultado.cuentaDestino.current_balance
+          );
+
+        // ======================================================
+        // RESPUESTA AL USUARIO
+        // ======================================================
+
+        const respuesta =
+          `✅ *Transferencia realizada*\n\n` +
+          `💸 ${resultado.cuentaOrigen.name} → ${resultado.cuentaDestino.name}\n` +
+          `💵 $${resultado.monto.toFixed(2)}\n\n` +
+          `💳 ${resultado.cuentaOrigen.name}: $${saldoOrigen.toFixed(2)}\n` +
+          `🏦 ${resultado.cuentaDestino.name}: $${saldoDestino.toFixed(2)}`;
+
+        await enviarMensajeWhatsApp(
+          from,
+          respuesta
+        );
+
+        console.log(
+          "📤 Respuesta de transferencia enviada"
+        );
+
+        console.log(
+          "==================================="
+        );
+
+        return res.sendStatus(200);
+      }
       // ========================================================
       // 9. CONSULTAS FINANCIERAS
       // ========================================================
