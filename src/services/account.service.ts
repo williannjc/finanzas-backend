@@ -49,3 +49,68 @@ export async function obtenerOCrearCuentaPrincipal(
 
   return newAccount;
 }
+
+export async function crearCuenta(
+  userId: string,
+  nombre: string,
+  tipo:
+    | "bank"
+    | "credit"
+    | "cash"
+    | "investment"
+    | "cooperative"
+    | "other"
+) {
+  const nombreNormalizado = nombre.trim();
+
+  if (!nombreNormalizado) {
+    throw new Error(
+      "El nombre de la cuenta es obligatorio."
+    );
+  }
+
+  // Evitar crear dos cuentas activas con el mismo nombre
+  const { data: cuentaExistente, error: buscarError } =
+    await supabase
+      .from("accounts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .ilike("name", nombreNormalizado)
+      .maybeSingle();
+
+  if (buscarError) {
+    throw buscarError;
+  }
+
+  if (cuentaExistente) {
+    return {
+      creada: false,
+      cuenta: cuentaExistente,
+    };
+  }
+
+  const { data: nuevaCuenta, error } =
+    await supabase
+      .from("accounts")
+      .insert({
+        user_id: userId,
+        name: nombreNormalizado,
+        type: tipo,
+        currency: "USD",
+        initial_balance: 0,
+        current_balance: 0,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    creada: true,
+    cuenta: nuevaCuenta,
+  };
+}

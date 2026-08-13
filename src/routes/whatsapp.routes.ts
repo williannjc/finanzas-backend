@@ -4,7 +4,12 @@ import { supabase } from "../config/supabase";
 
 import { analizarMensaje } from "../services/gemini.service";
 import { obtenerOCrearUsuario } from "../services/user.service";
-import { obtenerOCrearCuentaPrincipal } from "../services/account.service";
+
+import {
+  obtenerOCrearCuentaPrincipal,
+  crearCuenta,
+} from "../services/account.service";
+
 import { crearTransaccion } from "../services/transaction.service";
 import { enviarMensajeWhatsApp } from "../services/whatsapp.service";
 
@@ -228,6 +233,71 @@ router.post(
       console.dir(analisis, {
         depth: null,
       });
+
+      // ========================================================
+      // CREACIÓN DE CUENTAS
+      // ========================================================
+
+      if (analisis.intencion === "create_account") {
+        console.log("🏦 Creación de cuenta detectada");
+
+        if (
+          !analisis.nombreCuenta ||
+          !analisis.tipoCuenta
+        ) {
+          console.log(
+            "⚠️ Faltan datos para crear la cuenta."
+          );
+
+          await enviarMensajeWhatsApp(
+            from,
+            `⚠️ Necesito el nombre de la cuenta y su tipo para crearla.`
+          );
+
+          return res.sendStatus(200);
+        }
+
+        const resultado = await crearCuenta(
+          usuario.id,
+          analisis.nombreCuenta,
+          analisis.tipoCuenta
+        );
+
+        const cuentaCreada = resultado.cuenta;
+
+        let respuesta = "";
+
+        if (resultado.creada) {
+          respuesta =
+            `✅ *Cuenta creada*\n\n` +
+            `🏦 ${cuentaCreada.name}\n` +
+            `💵 Saldo inicial: $${Number(
+              cuentaCreada.current_balance || 0
+            ).toFixed(2)}`;
+        } else {
+          respuesta =
+            `ℹ️ *La cuenta ya existe*\n\n` +
+            `🏦 ${cuentaCreada.name}\n` +
+            `💵 Saldo actual: $${Number(
+              cuentaCreada.current_balance || 0
+            ).toFixed(2)}`;
+        }
+
+        await enviarMensajeWhatsApp(
+          from,
+          respuesta
+        );
+
+        console.log(
+          "📤 Respuesta de creación de cuenta enviada"
+        );
+
+        console.log(
+          "==================================="
+        );
+
+        return res.sendStatus(200);
+      }  
 
       // ========================================================
       // 9. CONSULTAS FINANCIERAS
