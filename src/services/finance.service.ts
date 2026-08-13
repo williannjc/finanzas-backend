@@ -288,6 +288,8 @@ export async function obtenerGastosPorCategoriaNombre(
     await supabase
       .from("categories")
       .select("id, name")
+      .eq("transaction_type", "expense")
+      .or(`user_id.is.null,user_id.eq.${userId}`)
       .ilike("name", `%${nombreCategoria}%`)
       .limit(1)
       .maybeSingle();

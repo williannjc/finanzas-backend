@@ -1,5 +1,7 @@
 import app from "./app";
-import { env } from "./config/env";
+import { env, validarConfiguracionProduccion } from "./config/env";
+
+validarConfiguracionProduccion();
 
 app.listen(env.PORT, () => {
   console.log("");

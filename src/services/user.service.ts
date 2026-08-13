@@ -1,5 +1,13 @@
 import { supabase } from "../config/supabase";
 
+function telefonoE164(whatsappPhone: string): string {
+  const digits = whatsappPhone.replace(/\D/g, "");
+  if (digits.length < 8 || digits.length > 15) {
+    throw new Error("El número de WhatsApp no tiene formato válido.");
+  }
+  return `+${digits}`;
+}
+
 export async function obtenerOCrearUsuario(
   whatsappPhone: string
 ) {
@@ -32,18 +40,29 @@ export async function obtenerOCrearUsuario(
   }
 
   const existingAuthUser = usersData.users.find(
-    (user) => user.phone === whatsappPhone
+    (user) =>
+      user.phone === whatsappPhone ||
+      user.phone === telefonoE164(whatsappPhone)
   );
 
-  if (!existingAuthUser) {
-    throw new Error(
-      "No existe un usuario de Auth para este número de WhatsApp"
-    );
+  let userId: string;
+  if (existingAuthUser) {
+    userId = existingAuthUser.id;
+    console.log("👤 Usuario de Auth existente encontrado");
+  } else {
+    const { data: createdUser, error: createUserError } =
+      await supabase.auth.admin.createUser({
+        phone: telefonoE164(whatsappPhone),
+        phone_confirm: true,
+      });
+
+    if (createUserError || !createdUser.user) {
+      throw createUserError || new Error("No se pudo crear el usuario de Auth.");
+    }
+
+    userId = createdUser.user.id;
+    console.log("✅ Usuario de Auth creado para WhatsApp");
   }
-
-  const userId = existingAuthUser.id;
-
-  console.log("👤 Usuario de Auth existente encontrado");
 
   // 3. Buscar el profile utilizando el ID de Auth
   const { data: profileById, error: profileByIdError } =

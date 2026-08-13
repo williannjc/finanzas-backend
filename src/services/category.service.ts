@@ -1,6 +1,7 @@
 import { supabase } from "../config/supabase";
 
 export async function obtenerCategoria(
+  userId: string,
   categoriaTexto: string,
   tipo: "income" | "expense"
 ) {
@@ -10,7 +11,8 @@ export async function obtenerCategoria(
   const { data: categories, error } = await supabase
     .from("categories")
     .select("*")
-    .eq("transaction_type", tipo);
+    .eq("transaction_type", tipo)
+    .or(`user_id.is.null,user_id.eq.${userId}`);
 
   if (error) {
     throw error;

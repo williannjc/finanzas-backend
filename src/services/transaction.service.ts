@@ -26,6 +26,7 @@ export async function crearTransaccion(
 
   if (categoria) {
     const category = await obtenerCategoria(
+      userId,
       categoria,
       tipo
     );

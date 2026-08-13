@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { env } from "../config/env";
 import { supabase } from "../config/supabase";
 
-import { analizarMensaje } from "../services/openai.service";
+import { analizarMensaje } from "../services/gemini.service";
 import { obtenerOCrearUsuario } from "../services/user.service";
 import { obtenerOCrearCuentaPrincipal } from "../services/account.service";
 import { crearTransaccion } from "../services/transaction.service";
@@ -121,6 +121,17 @@ router.post(
         return res.sendStatus(200);
       }
 
+      // Meta también entrega multimedia y otros eventos. No deben crear
+      // usuarios, cuentas ni registros financieros hasta que exista soporte
+      // explícito para ese tipo de mensaje.
+      if (messageType !== "text") {
+        console.log(
+          `ℹ️ Tipo de mensaje no procesado: ${messageType}`
+        );
+
+        return res.sendStatus(200);
+      }
+
       // ========================================================
       // 3. EVITAR MENSAJES DUPLICADOS
       // ========================================================
@@ -194,22 +205,6 @@ router.post(
         depth: null,
       });
 
-      // ========================================================
-      // 7. PROCESAR SOLO MENSAJES DE TEXTO
-      // ========================================================
-
-      if (messageType !== "text") {
-        console.log(
-          `ℹ️ Tipo de mensaje no procesado: ${messageType}`
-        );
-
-        console.log(
-          "==================================="
-        );
-
-        return res.sendStatus(200);
-      }
-
       const text = message.text?.body;
 
       console.log("💬 Mensaje:", text);
@@ -257,6 +252,7 @@ router.post(
         // ========================================================
 
         if (
+          analisis.intencion === "balance_query" ||
           consultaTexto.includes("cuánto tengo") ||
           consultaTexto.includes("cuanto tengo") ||
           consultaTexto.includes("mi saldo") ||
@@ -307,6 +303,7 @@ router.post(
         // ========================================================
 
         if (
+          analisis.intencion === "daily_expense_query" ||
           consultaTexto.includes("gastado hoy") ||
           consultaTexto.includes("gastos de hoy") ||
           consultaTexto.includes("gaste hoy") ||
@@ -362,6 +359,7 @@ router.post(
         // ========================================================
 
         if (
+          analisis.intencion === "monthly_expense_query" ||
           consultaTexto.includes("gastado este mes") ||
           consultaTexto.includes("gastos de este mes") ||
           consultaTexto.includes("gastos este mes") ||
@@ -410,6 +408,7 @@ router.post(
         // ========================================================
 
         if (
+          analisis.intencion === "monthly_income_query" ||
           consultaTexto.includes("recibido este mes") ||
           consultaTexto.includes("recibí este mes") ||
           consultaTexto.includes("recibi este mes") ||
@@ -460,6 +459,7 @@ router.post(
         // ========================================================
 
         if (
+          analisis.intencion === "summary_query" ||
           consultaTexto.includes("resumen") ||
           consultaTexto.includes("resumen de mis finanzas") ||
           consultaTexto.includes("resumen financiero")
@@ -525,6 +525,7 @@ router.post(
         // ========================================================
 
         if (
+          analisis.intencion === "recent_transactions_query" ||
           consultaTexto.includes("últimos movimientos") ||
           consultaTexto.includes("ultimos movimientos") ||
           consultaTexto.includes("últimos movimientos") ||
@@ -589,7 +590,10 @@ router.post(
         // 9.7 GASTOS POR CATEGORÍA
         // ========================================================
 
-        if (analisis.categoria) {
+        if (
+          analisis.intencion === "category_expense_query" &&
+          analisis.categoria
+        ) {
           console.log(
             "🏷️ Consulta por categoría:",
             analisis.categoria
@@ -688,9 +692,11 @@ router.post(
       // ========================================================
 
       const esGasto =
+        analisis.intencion === "transaction" &&
         analisis.tipo === "gasto";
 
       const esIngreso =
+        analisis.intencion === "transaction" &&
         analisis.tipo === "ingreso";
 
       /**
