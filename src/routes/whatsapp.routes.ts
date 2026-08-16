@@ -84,6 +84,8 @@ router.post(
   async (req: Request, res: Response) => {
     console.log("========== NUEVO MENSAJE ==========");
 
+    let from = "";
+
     try {
       // ========================================================
       // 1. OBTENER INFORMACIÓN DEL EVENTO
@@ -107,7 +109,7 @@ router.post(
         return res.sendStatus(200);
       }
 
-      const from = message.from;
+      from = message.from;
       const messageType = message.type;
       const messageId = message.id;
 
@@ -1069,6 +1071,114 @@ router.post(
         error?.response?.data ||
         error
       );
+
+      // ========================================================
+      // MANEJO DE ERRORES DE TRANSFERENCIAS
+      // ========================================================
+
+      const mensajeError =
+        error instanceof Error
+          ? error.message
+          : "";
+
+      if (
+        mensajeError.includes(
+          "Saldo insuficiente en la cuenta de origen"
+        )
+      ) {
+        await enviarMensajeWhatsApp(
+          from,
+           `⚠️ *Transferencia rechazada*\n\n` +
+            `💳 No tienes saldo suficiente en la cuenta de origen.\n\n` +
+            `💵 ${mensajeError.replace(
+            "Saldo insuficiente en la cuenta de origen. ",
+            ""
+          )}`
+        );
+
+        console.log(
+          "📤 Respuesta de saldo insuficiente enviada"
+        );
+
+        console.log(
+          "==================================="
+        );
+
+        return res.sendStatus(200);
+      }
+
+      if (
+        mensajeError.includes(
+          "No encontré la cuenta de destino"
+        )
+      ) {
+        await enviarMensajeWhatsApp(
+          from,
+            `⚠️ *Transferencia no realizada*\n\n` +
+            `${mensajeError}\n\n` +
+            `Verifica el nombre de la cuenta e inténtalo nuevamente.`
+        );
+
+        console.log(
+          "📤 Respuesta de cuenta inexistente enviada"
+        );
+
+        console.log(
+          "==================================="
+        );
+
+        return res.sendStatus(200);
+      }
+
+      if (
+        mensajeError.includes(
+          "No encontré la cuenta de origen"
+        )
+      ) {
+        await enviarMensajeWhatsApp(
+          from,
+            `⚠️ *Transferencia no realizada*\n\n` +
+            `${mensajeError}\n\n` +
+            `Verifica el nombre de la cuenta e inténtalo nuevamente.`
+        );
+
+        console.log(
+          "📤 Respuesta de cuenta de origen inexistente enviada"
+        );
+
+        console.log(
+          "==================================="
+        );
+
+        return res.sendStatus(200);
+      }
+
+      if (
+        mensajeError.includes(
+          "La cuenta de origen y destino no pueden ser la misma"
+        )
+      ) {
+        await enviarMensajeWhatsApp(
+          from,
+            `⚠️ *Transferencia no realizada*\n\n` +
+            `La cuenta de origen y destino no pueden ser la misma.\n\n` +
+            `Indica dos cuentas diferentes para realizar la transferencia.`
+        );
+
+        console.log(
+          "📤 Respuesta de misma cuenta enviada"
+        );
+
+        console.log(
+          "==================================="
+        );
+
+        return res.sendStatus(200);
+      }
+
+      // ========================================================
+      // ERROR NO CONTROLADO
+      // ========================================================
 
       console.log(
         "==================================="
