@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "test": "npm run build && node --test dist/services/gemini.service.test.js",
+    "test": "npm run build && node --test dist/services/*.test.js",
     "start": "node dist/server.js"
   },
   "author": "",
