@@ -9,6 +9,7 @@ import {
   obtenerOCrearCuentaPrincipal,
   crearCuenta,
   transferirEntreCuentas,
+  obtenerCuentas,
 } from "../services/account.service";
 
 import { crearTransaccion } from "../services/transaction.service";
@@ -31,12 +32,12 @@ const router = Router();
  * COMPROBAR SI UN MENSAJE YA FUE PROCESADO
  * ============================================================
  */
-async function mensajeYaProcesado(
+async function obtenerEstadoMensaje(
   messageId: string
-): Promise<boolean> {
+): Promise<"processing" | "processed" | "failed" | null> {
   const { data, error } = await supabase
     .from("processed_messages")
-    .select("id")
+    .select("status")
     .eq("message_id", messageId)
     .maybeSingle();
 
@@ -44,7 +45,38 @@ async function mensajeYaProcesado(
     throw error;
   }
 
-  return !!data;
+  return data?.status ?? null;
+}
+
+async function actualizarEstadoMensaje(
+  messageId: string,
+  status: "processed" | "failed",
+  errorMessage: string | null = null
+): Promise<void> {
+  const { error } = await supabase
+    .from("processed_messages")
+    .update({
+      status,
+      processed_at:
+        status === "processed"
+          ? new Date().toISOString()
+          : null,
+      error_message: errorMessage,
+    })
+    .eq("message_id", messageId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function finalizarMensajeProcesado(
+  messageId: string
+): Promise<void> {
+  await actualizarEstadoMensaje(
+    messageId,
+    "processed"
+  );
 }
 
 /**
@@ -85,6 +117,7 @@ router.post(
     console.log("========== NUEVO MENSAJE ==========");
 
     let from = "";
+    let messageId = "";
 
     try {
       // ========================================================
@@ -111,7 +144,7 @@ router.post(
 
       from = message.from;
       const messageType = message.type;
-      const messageId = message.id;
+      messageId = message.id;
 
       console.log("📱 Remitente:", from);
       console.log("📦 Tipo:", messageType);
@@ -144,44 +177,87 @@ router.post(
       // 3. EVITAR MENSAJES DUPLICADOS
       // ========================================================
 
-      const yaProcesado =
-        await mensajeYaProcesado(messageId);
+      const estadoMensaje =
+        await obtenerEstadoMensaje(messageId);
 
-      if (yaProcesado) {
+      if (estadoMensaje === "processed") {
         console.log(
-          "🔁 Mensaje duplicado. Se ignora."
+          "🔁 Mensaje ya procesado. Se ignora."
         );
 
         return res.sendStatus(200);
       }
 
-      // ========================================================
-      // 4. REGISTRAR MENSAJE COMO PROCESADO
-      // ========================================================
+      if (estadoMensaje === "processing") {
+        console.log(
+          "⏳ Mensaje actualmente en procesamiento. Se ignora."
+        );
 
-      const { error: insertError } =
-        await supabase
+        return res.sendStatus(200);
+      }
+
+      if (estadoMensaje === "failed") {
+        console.log(
+          "🔄 Mensaje anterior falló. Se intentará recuperar."
+        );
+
+        const {
+          data: mensajeRecuperado,
+          error: retryError,
+        } = await supabase
           .from("processed_messages")
-          .insert({
-            message_id: messageId,
-          });
+          .update({
+            status: "processing",
+            error_message: null,
+            processed_at: null,
+          })
+          .eq("message_id", messageId)
+          .eq("status", "failed")
+          .select("id")
+          .maybeSingle();
 
-      if (insertError) {
-        /**
-         * Si otra petición registró el mismo mensaje
-         * al mismo tiempo, la restricción UNIQUE
-         * evita que se procese dos veces.
-         */
-        if (insertError.code === "23505") {
+        if (retryError) {
+          throw retryError;
+        }
+
+        // Otro proceso pudo haber recuperado el mensaje
+        // antes que nosotros.
+        if (!mensajeRecuperado) {
           console.log(
-            "🔁 Mensaje duplicado detectado por UNIQUE. Se ignora."
+            "⏳ Otro proceso ya está recuperando este mensaje. Se ignora."
           );
 
           return res.sendStatus(200);
         }
 
-        throw insertError;
+        console.log(
+          "✅ Mensaje fallido reservado nuevamente para procesamiento"
+        );
+      } else {
+        const { error: insertError } =
+          await supabase
+            .from("processed_messages")
+            .insert({
+              message_id: messageId,
+              status: "processing",
+            });
+
+        if (insertError) {
+          if (insertError.code === "23505") {
+            console.log(
+              "🔁 Mensaje duplicado detectado por UNIQUE. Se ignora."
+            );
+
+            return res.sendStatus(200);
+          }
+
+          throw insertError;
+        }
       }
+
+      console.log(
+        "✅ Mensaje reservado para procesamiento"
+      );
 
       console.log(
         "✅ Mensaje nuevo registrado para procesamiento"
@@ -295,12 +371,10 @@ router.post(
           "📤 Respuesta de creación de cuenta enviada"
         );
 
-        console.log(
-          "==================================="
-        );
+        await finalizarMensajeProcesado(messageId);
 
         return res.sendStatus(200);
-      }  
+      }
 
       // ========================================================
       // TRANSFERENCIAS ENTRE CUENTAS
@@ -329,6 +403,8 @@ router.post(
             `Por ejemplo:\n` +
             `💸 transferí $20 de Efectivo a Banco Pichincha`
           );
+
+	  await finalizarMensajeProcesado(messageId);
 
           return res.sendStatus(200);
         }
@@ -407,6 +483,8 @@ router.post(
           "📤 Respuesta de transferencia enviada"
         );
 
+	await finalizarMensajeProcesado(messageId);
+
         console.log(
           "==================================="
         );
@@ -475,6 +553,8 @@ router.post(
             "📤 Respuesta de saldo enviada"
           );
 
+	  await finalizarMensajeProcesado(messageId);
+
           console.log(
             "==================================="
           );
@@ -531,6 +611,8 @@ router.post(
             "📤 Respuesta de gastos del día enviada"
           );
 
+	  await finalizarMensajeProcesado(messageId);
+
           console.log(
             "==================================="
           );
@@ -579,6 +661,8 @@ router.post(
           console.log(
             "📤 Respuesta de gastos del mes enviada"
           );
+
+	  await finalizarMensajeProcesado(messageId);
 
           console.log(
             "==================================="
@@ -630,6 +714,8 @@ router.post(
           console.log(
             "📤 Respuesta de ingresos del mes enviada"
           );
+
+	  await finalizarMensajeProcesado(messageId);
 
           console.log(
             "==================================="
@@ -697,6 +783,8 @@ router.post(
             "📤 Respuesta de resumen enviada"
           );
 
+	  await finalizarMensajeProcesado(messageId);
+
           console.log(
             "==================================="
           );
@@ -762,6 +850,8 @@ router.post(
           console.log(
             "📤 Respuesta de últimos movimientos enviada"
           );
+
+	  await finalizarMensajeProcesado(messageId);
 
           console.log(
             "==================================="
@@ -829,6 +919,8 @@ router.post(
             "📤 Respuesta de categoría enviada"
           );
 
+	  await finalizarMensajeProcesado(messageId);
+
           console.log(
             "==================================="
           );
@@ -864,6 +956,8 @@ router.post(
           "📤 Ayuda de consultas enviada"
         );
 
+	await finalizarMensajeProcesado(messageId);
+
         console.log(
           "==================================="
         );
@@ -892,6 +986,8 @@ router.post(
           "ℹ️ El mensaje no corresponde a una transacción ni consulta."
         );
 
+	await finalizarMensajeProcesado(messageId);
+
         console.log(
           "==================================="
         );
@@ -913,6 +1009,8 @@ router.post(
         console.log(
           "⚠️ La transacción no tiene un monto válido."
         );
+
+	await finalizarMensajeProcesado(messageId);
 
         console.log(
           "==================================="
@@ -946,6 +1044,7 @@ router.post(
             analisis.categoria,
           descripcion:
             analisis.descripcion,
+          sourceMessageId: messageId,
         });
 
       console.log(
@@ -1059,27 +1158,60 @@ router.post(
         "📤 Respuesta enviada al usuario"
       );
 
+      await finalizarMensajeProcesado(messageId);
+
       console.log(
         "==================================="
       );
 
       return res.sendStatus(200);
 
-    } catch (error: any) {
-      console.error(
-        "❌ Error procesando webhook:",
-        error?.response?.data ||
-        error
+   } catch (error: any) {
+    console.error(
+      "❌ Error procesando webhook:",
+      error?.response?.data ||
+      error
+    );
+
+    const mensajeError =
+      error instanceof Error
+        ? error.message
+        : "";
+
+    const esErrorNegocioControlado =
+      mensajeError.includes(
+        "Saldo insuficiente en la cuenta de origen"
+      ) ||
+      mensajeError.includes(
+        "No encontré la cuenta de destino"
+      ) ||
+      mensajeError.includes(
+        "No encontré la cuenta de origen"
+      ) ||
+      mensajeError.includes(
+        "La cuenta de origen y destino no pueden ser la misma"
       );
+
+    // Los errores técnicos sí deben quedar como failed
+    // para permitir un retry posterior.
+    if (!esErrorNegocioControlado) {
+      try {
+        await actualizarEstadoMensaje(
+          messageId,
+          "failed",
+          mensajeError || String(error)
+        );
+      } catch (estadoError) {
+        console.error(
+          "❌ No se pudo actualizar el estado del mensaje:",
+          estadoError
+        );
+      }
+    }
 
       // ========================================================
       // MANEJO DE ERRORES DE TRANSFERENCIAS
       // ========================================================
-
-      const mensajeError =
-        error instanceof Error
-          ? error.message
-          : "";
 
       if (
         mensajeError.includes(
@@ -1104,7 +1236,8 @@ router.post(
           "==================================="
         );
 
-        return res.sendStatus(200);
+        await finalizarMensajeProcesado(messageId);
+	return res.sendStatus(200);
       }
 
       if (
@@ -1127,7 +1260,8 @@ router.post(
           "==================================="
         );
 
-        return res.sendStatus(200);
+        await finalizarMensajeProcesado(messageId);
+	return res.sendStatus(200);
       }
 
       if (
@@ -1150,7 +1284,8 @@ router.post(
           "==================================="
         );
 
-        return res.sendStatus(200);
+        await finalizarMensajeProcesado(messageId);
+	return res.sendStatus(200);
       }
 
       if (
@@ -1173,7 +1308,8 @@ router.post(
           "==================================="
         );
 
-        return res.sendStatus(200);
+        await finalizarMensajeProcesado(messageId);
+	return res.sendStatus(200);
       }
 
       // ========================================================

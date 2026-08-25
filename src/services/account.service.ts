@@ -239,3 +239,22 @@ export async function transferirEntreCuentas(
     },
   };
 }
+
+export async function obtenerCuentas(
+  userId: string
+) {
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .order("created_at", {
+      ascending: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}

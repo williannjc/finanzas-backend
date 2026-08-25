@@ -8,6 +8,7 @@ interface CrearTransaccionParams {
   monto: number;
   categoria: string | null;
   descripcion: string | null;
+  sourceMessageId?: string | null;
 }
 
 export async function crearTransaccion(
@@ -20,6 +21,7 @@ export async function crearTransaccion(
     monto,
     categoria,
     descripcion,
+    sourceMessageId,
   } = params;
 
   let categoryId: string | null = null;
@@ -46,11 +48,48 @@ export async function crearTransaccion(
         type: tipo,
         amount: monto,
         description: descripcion,
+        source_message_id: sourceMessageId ?? null,
       })
       .select()
       .single();
 
   if (error) {
+    // ============================================================
+    // IDEMPOTENCIA
+    // ============================================================
+    // Si el mismo mensaje de WhatsApp ya creó una transacción,
+    // PostgreSQL rechazará el INSERT por la restricción UNIQUE
+    // de source_message_id.
+    //
+    // En lugar de crear otra transacción, recuperamos la existente.
+    // ============================================================
+
+    if (
+      error.code === "23505" &&
+      sourceMessageId
+    ) {
+      const {
+        data: existingTransaction,
+        error: existingError,
+      } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("source_message_id", sourceMessageId)
+        .maybeSingle();
+
+      if (existingError) {
+        throw existingError;
+      }
+
+      if (existingTransaction) {
+        console.log(
+          "🔁 Transacción existente recuperada por source_message_id"
+        );
+
+        return existingTransaction;
+      }
+    }
+
     throw error;
   }
 
