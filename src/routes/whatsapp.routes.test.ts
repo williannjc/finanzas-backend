@@ -37,6 +37,7 @@ let ultimaTransferencia: {
   cuentaOrigen: string;
   cuentaDestino: string;
   monto: number;
+  sourceMessageId: string;
 } | null = null;
 
 let processedMessagesMock: Record<
@@ -88,7 +89,8 @@ const accountServiceMock = mock.module(
         userId: string,
         cuentaOrigen: string,
         cuentaDestino: string,
-        monto: number
+        monto: number,
+        sourceMessageId: string
       ) => {
         transferenciasEjecutadas++;
 
@@ -97,6 +99,7 @@ const accountServiceMock = mock.module(
           cuentaOrigen,
           cuentaDestino,
           monto,
+          sourceMessageId,
         };
 
         return {
@@ -644,6 +647,7 @@ test("POST /webhook ejecuta una transferencia válida", async () => {
       cuentaOrigen: "Efectivo",
       cuentaDestino: "Banco Pichincha",
       monto: 20,
+      sourceMessageId: "test-transfer-valid",
     }
   );
 });
