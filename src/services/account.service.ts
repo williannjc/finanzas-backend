@@ -118,7 +118,8 @@ export async function transferirEntreCuentas(
   userId: string,
   cuentaOrigenNombre: string,
   cuentaDestinoNombre: string,
-  monto: number
+  monto: number,
+  sourceMessageId?: string
 ) {
   const origenNombre = cuentaOrigenNombre.trim();
   const destinoNombre = cuentaDestinoNombre.trim();
@@ -199,6 +200,7 @@ export async function transferirEntreCuentas(
       p_destination_account_id: cuentaDestino.id,
       p_amount: monto,
       p_description: `Transferencia de ${cuentaOrigen.name} a ${cuentaDestino.name}`,
+      p_source_message_id: sourceMessageId ?? null,
     }
   );
 
