@@ -343,6 +343,7 @@ test("ejecuta correctamente una transferencia válida", async () => {
         p_amount: 20,
         p_description:
           "Transferencia de Efectivo a Banco Pichincha",
+        p_source_message_id: "test-transfer-001",
       });
 
       return {
@@ -364,7 +365,8 @@ test("ejecuta correctamente una transferencia válida", async () => {
       USER_ID,
       "Efectivo",
       "Banco Pichincha",
-      20
+      20,
+      "test-transfer-001"
     );
 
   assert.equal(
@@ -392,5 +394,52 @@ test("ejecuta correctamente una transferencia válida", async () => {
   assert.equal(
     resultado.cuentaDestino.current_balance,
     70
+  );
+});
+
+test("envía el sourceMessageId al RPC de transferencia", async () => {
+  mockearCuentas(cuentaOrigen, cuentaDestino);
+
+  let parametrosRecibidos: Record<string, unknown> | null = null;
+
+  mock.method(
+    supabase as any,
+    "rpc",
+    async (
+      nombreFuncion: string,
+      parametros: Record<string, unknown>
+    ) => {
+      assert.equal(
+        nombreFuncion,
+        "transfer_between_accounts"
+      );
+
+      parametrosRecibidos = parametros;
+
+      return {
+        data: [
+          {
+            transfer_id: "transfer-source-message",
+            amount: 20,
+            source_balance: 80,
+            destination_balance: 70,
+          },
+        ],
+        error: null,
+      };
+    }
+  );
+
+  await transferirEntreCuentas(
+    USER_ID,
+    "Efectivo",
+    "Banco Pichincha",
+    20,
+    "whatsapp-message-123"
+  );
+
+  assert.equal(
+    parametrosRecibidos?.p_source_message_id,
+    "whatsapp-message-123"
   );
 });
