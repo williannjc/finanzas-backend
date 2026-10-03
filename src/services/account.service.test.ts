@@ -343,6 +343,7 @@ test("ejecuta correctamente una transferencia válida", async () => {
         p_amount: 20,
         p_description:
           "Transferencia de Efectivo a Banco Pichincha",
+        p_source_message_id: null,
       });
 
       return {
