@@ -25,4 +25,9 @@ jobs:
         run: npm ci
 
       - name: Run tests
+        env:
+          # Valores ficticios: las pruebas deben usar mocks, nunca datos reales.
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: test-service-role-key-not-valid
+          SUPABASE_ANON_KEY: test-anon-key-not-valid
         run: npm test
