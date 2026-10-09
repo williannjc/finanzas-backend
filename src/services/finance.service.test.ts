@@ -1,4 +1,4 @@
-import test, { mock } from "node:test";
+import test, { before, mock } from "node:test";
 import assert from "node:assert/strict";
 
 // Estas pruebas son unitarias: nunca deben conectarse a la base de datos real.
@@ -25,67 +25,73 @@ mock.module("../config/supabase.js", {
   },
 });
 
-const {
-  obtenerSaldoTotal,
-  obtenerGastosDelDia,
-  obtenerGastosDelMes,
-  obtenerIngresosDelMes,
-  obtenerGastosPorCategoria,
-  obtenerGastosPorCategoriaNombre,
-  obtenerUltimasTransacciones,
-  obtenerResumenMensual,
-} = await import("./finance.service.js");
+let financeService: typeof import("./finance.service.js");
+
+before(async () => {
+  financeService = await import("./finance.service.js");
+});
 
 const USER_ID = "3af35876-c813-46f6-8cbb-7dffbd4d0b87";
 
 test("finance.service exporta todas las consultas principales", () => {
-  assert.equal(typeof obtenerSaldoTotal, "function");
-  assert.equal(typeof obtenerGastosDelDia, "function");
-  assert.equal(typeof obtenerGastosDelMes, "function");
-  assert.equal(typeof obtenerIngresosDelMes, "function");
-  assert.equal(typeof obtenerGastosPorCategoria, "function");
-  assert.equal(typeof obtenerGastosPorCategoriaNombre, "function");
-  assert.equal(typeof obtenerUltimasTransacciones, "function");
-  assert.equal(typeof obtenerResumenMensual, "function");
+  assert.equal(typeof financeService.obtenerSaldoTotal, "function");
+  assert.equal(typeof financeService.obtenerGastosDelDia, "function");
+  assert.equal(typeof financeService.obtenerGastosDelMes, "function");
+  assert.equal(typeof financeService.obtenerIngresosDelMes, "function");
+  assert.equal(typeof financeService.obtenerGastosPorCategoria, "function");
+  assert.equal(typeof financeService.obtenerGastosPorCategoriaNombre, "function");
+  assert.equal(typeof financeService.obtenerUltimasTransacciones, "function");
+  assert.equal(typeof financeService.obtenerResumenMensual, "function");
 });
 
 test("obtenerSaldoTotal devuelve cuentas y saldo numérico", async () => {
-  const resultado = await obtenerSaldoTotal(USER_ID);
-  assert.deepEqual(resultado, { saldoTotal: 0, cuentas: [] });
+  assert.deepEqual(await financeService.obtenerSaldoTotal(USER_ID), {
+    saldoTotal: 0,
+    cuentas: [],
+  });
 });
 
 test("obtenerGastosDelDia devuelve total y transacciones", async () => {
-  const resultado = await obtenerGastosDelDia(USER_ID);
-  assert.deepEqual(resultado, { total: 0, transacciones: [] });
+  assert.deepEqual(await financeService.obtenerGastosDelDia(USER_ID), {
+    total: 0,
+    transacciones: [],
+  });
 });
 
 test("obtenerGastosDelMes devuelve total y transacciones", async () => {
-  const resultado = await obtenerGastosDelMes(USER_ID);
-  assert.deepEqual(resultado, { total: 0, transacciones: [] });
+  assert.deepEqual(await financeService.obtenerGastosDelMes(USER_ID), {
+    total: 0,
+    transacciones: [],
+  });
 });
 
 test("obtenerIngresosDelMes devuelve total y transacciones", async () => {
-  const resultado = await obtenerIngresosDelMes(USER_ID);
-  assert.deepEqual(resultado, { total: 0, transacciones: [] });
+  assert.deepEqual(await financeService.obtenerIngresosDelMes(USER_ID), {
+    total: 0,
+    transacciones: [],
+  });
 });
 
 test("obtenerGastosPorCategoria devuelve un arreglo", async () => {
-  assert.deepEqual(await obtenerGastosPorCategoria(USER_ID), []);
+  assert.deepEqual(await financeService.obtenerGastosPorCategoria(USER_ID), []);
 });
 
 test("obtenerGastosPorCategoriaNombre devuelve estructura válida sin categoría", async () => {
   assert.deepEqual(
-    await obtenerGastosPorCategoriaNombre(USER_ID, "alimentacion"),
+    await financeService.obtenerGastosPorCategoriaNombre(USER_ID, "alimentacion"),
     { categoria: "alimentacion", total: 0, transacciones: [] }
   );
 });
 
 test("obtenerUltimasTransacciones devuelve un arreglo", async () => {
-  assert.deepEqual(await obtenerUltimasTransacciones(USER_ID, 5), []);
+  assert.deepEqual(
+    await financeService.obtenerUltimasTransacciones(USER_ID, 5),
+    []
+  );
 });
 
 test("obtenerResumenMensual devuelve ingresos, gastos, balance y categorías", async () => {
-  assert.deepEqual(await obtenerResumenMensual(USER_ID), {
+  assert.deepEqual(await financeService.obtenerResumenMensual(USER_ID), {
     ingresos: 0,
     gastos: 0,
     balance: 0,
