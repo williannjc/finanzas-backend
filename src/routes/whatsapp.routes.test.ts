@@ -1295,3 +1295,42 @@ test(
     );
   }
 );
+
+test(
+  "POST /webhook no repite una transferencia al recibir nuevamente el mismo mensaje",
+  async () => {
+    resetTransferenciaMock();
+
+    analizarMensajeResultado = {
+      tipo: "otro",
+      monto: 20,
+      categoria: "transferencia",
+      descripcion: "transferencia duplicada de prueba",
+      intencion: "transfer",
+      cuentaOrigen: "Efectivo",
+      cuentaDestino: "Banco Pichincha",
+    };
+
+    const message = crearMensaje(
+      "transfiere 20 dólares de Efectivo a Banco Pichincha",
+      "test-transfer-sequential-duplicate"
+    );
+
+    const firstResponse = await request(app)
+      .post("/webhook")
+      .send(message);
+
+    const secondResponse = await request(app)
+      .post("/webhook")
+      .send(message);
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 200);
+    assert.equal(transferenciasEjecutadas, 1);
+    assert.equal(
+      processedMessagesMock["test-transfer-sequential-duplicate"].status,
+      "processed"
+    );
+  }
+);
+
