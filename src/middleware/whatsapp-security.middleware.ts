@@ -2,8 +2,6 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextFunction, Request, Response } from "express";
 import { env } from "../config/env";
 
-type RequestWithRawBody = Request & { rawBody?: Buffer };
-
 export function coincideNumeroAutorizado(
   sender: string,
   allowedNumber: string
@@ -29,7 +27,7 @@ export function verificarFirmaMeta(
  * personal configurado. En desarrollo/test no bloquea los tests locales.
  */
 export function validarWebhookMeta(
-  req: RequestWithRawBody,
+  req: Request,
   res: Response,
   next: NextFunction
 ): void {
@@ -40,7 +38,7 @@ export function validarWebhookMeta(
     return;
   }
 
-  const rawBody = req.rawBody;
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
   const signature = req.header("x-hub-signature-256") || "";
   if (!rawBody || !verificarFirmaMeta(rawBody, signature, env.META_APP_SECRET)) {
     res.sendStatus(401);
