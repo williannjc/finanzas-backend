@@ -24,7 +24,13 @@ export const env = {
     process.env.WHATSAPP_PHONE_NUMBER_ID || "",
 
   WHATSAPP_VERIFY_TOKEN:
-    process.env.WHATSAPP_VERIFY_TOKEN || ""
+    process.env.WHATSAPP_VERIFY_TOKEN || "",
+
+  WHATSAPP_ALLOWED_PHONE_NUMBER:
+    process.env.WHATSAPP_ALLOWED_PHONE_NUMBER || "",
+
+  META_APP_SECRET:
+    process.env.META_APP_SECRET || ""
 };
 
 export function validarConfiguracionProduccion(): void {
@@ -37,6 +43,8 @@ export function validarConfiguracionProduccion(): void {
     ["WHATSAPP_ACCESS_TOKEN", env.WHATSAPP_ACCESS_TOKEN],
     ["WHATSAPP_PHONE_NUMBER_ID", env.WHATSAPP_PHONE_NUMBER_ID],
     ["WHATSAPP_VERIFY_TOKEN", env.WHATSAPP_VERIFY_TOKEN],
+    ["WHATSAPP_ALLOWED_PHONE_NUMBER", env.WHATSAPP_ALLOWED_PHONE_NUMBER],
+    ["META_APP_SECRET", env.META_APP_SECRET],
   ];
   const missing = required.filter(([, value]) => !value).map(([name]) => name);
   if (missing.length > 0) {
