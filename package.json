@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "test": "npm run build && node --experimental-test-module-mocks --test dist/services/*.test.js dist/routes/*.test.js",
+    "test": "npm run build && node --experimental-test-module-mocks --test dist/services/*.test.js dist/routes/*.test.js dist/middleware/*.test.js",
     "start": "node dist/server.js"
   },
   "author": "",

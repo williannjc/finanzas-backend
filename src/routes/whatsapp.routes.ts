@@ -3,7 +3,8 @@ import { env } from "../config/env";
 import { supabase } from "../config/supabase";
 
 import { analizarMensaje } from "../services/gemini.service";
-import { obtenerOCrearUsuario } from "../services/user.service";
+import { obtenerUsuarioWhatsAppAutorizado } from "../services/user.service";
+import { validarWebhookMeta } from "../middleware/whatsapp-security.middleware";
 
 import {
   obtenerOCrearCuentaPrincipal,
@@ -113,6 +114,7 @@ router.get(
  */
 router.post(
   "/webhook",
+  validarWebhookMeta,
   async (req: Request, res: Response) => {
     console.log("========== NUEVO MENSAJE ==========");
 
@@ -268,7 +270,7 @@ router.post(
       // ========================================================
 
       const usuario =
-        await obtenerOCrearUsuario(from);
+        await obtenerUsuarioWhatsAppAutorizado(from);
 
       console.log("👤 Usuario:");
       console.dir(usuario, {

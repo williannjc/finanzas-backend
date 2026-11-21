@@ -125,7 +125,7 @@ const userServiceMock = mock.module(
   "../services/user.service.js",
   {
     namedExports: {
-      obtenerOCrearUsuario: async () => ({
+      obtenerUsuarioWhatsAppAutorizado: async () => ({
         id: "user-test",
         full_name: "Usuario Test",
         phone: "593999999999",
