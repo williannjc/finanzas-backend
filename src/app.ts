@@ -10,8 +10,8 @@ app.use(cors());
 
 // Meta firma el cuerpo HTTP original; conservarlo antes de parsear JSON.
 app.use(express.json({
-  verify: (req: Request & { rawBody?: Buffer }, _res, buffer) => {
-    req.rawBody = Buffer.from(buffer);
+  verify: (req, _res, buffer) => {
+    (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
   },
 }));
 
