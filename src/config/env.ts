@@ -44,7 +44,6 @@ export function validarConfiguracionProduccion(): void {
     ["WHATSAPP_PHONE_NUMBER_ID", env.WHATSAPP_PHONE_NUMBER_ID],
     ["WHATSAPP_VERIFY_TOKEN", env.WHATSAPP_VERIFY_TOKEN],
     ["WHATSAPP_ALLOWED_PHONE_NUMBER", env.WHATSAPP_ALLOWED_PHONE_NUMBER],
-    ["META_APP_SECRET", env.META_APP_SECRET],
   ];
   const missing = required.filter(([, value]) => !value).map(([name]) => name);
   if (missing.length > 0) {
