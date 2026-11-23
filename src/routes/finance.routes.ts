@@ -124,7 +124,7 @@ router.get("/transactions", async (req: AuthenticatedRequest, res) => {
     const { from, to, type, categoryId, accountId } = req.query;
     let query = supabase
       .from("transactions")
-      .select("id, type, amount, description, notes, transaction_date, created_at, account_id, category_id")
+      .select("id, type, amount, description, notes, transaction_date, created_at, account_id, destination_account_id, category_id")
       .eq("user_id", userId)
       .order("transaction_date", { ascending: false });
 
