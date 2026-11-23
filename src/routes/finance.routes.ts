@@ -38,6 +38,86 @@ router.get("/dashboard", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+router.post("/transfers", async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const body = req.body as Record<string, unknown>;
+    const sourceAccountId = body.sourceAccountId;
+    const destinationAccountId = body.destinationAccountId;
+    const amount = Number(body.amount);
+
+    if (
+      typeof sourceAccountId !== "string" ||
+      typeof destinationAccountId !== "string" ||
+      !sourceAccountId ||
+      !destinationAccountId ||
+      sourceAccountId === destinationAccountId ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return res.status(400).json({
+        error: "sourceAccountId, destinationAccountId y un amount positivo son obligatorios.",
+      });
+    }
+
+    // Solo se aceptan cuentas activas que pertenezcan al usuario autenticado.
+    const { data: accounts, error: accountsError } = await supabase
+      .from("accounts")
+      .select("id, name, currency")
+      .in("id", [sourceAccountId, destinationAccountId])
+      .eq("user_id", userId)
+      .eq("is_active", true);
+
+    if (accountsError) throw accountsError;
+
+    const source = accounts?.find((account) => account.id === sourceAccountId);
+    const destination = accounts?.find((account) => account.id === destinationAccountId);
+
+    if (!source || !destination) {
+      return res.status(404).json({ error: "Una o ambas cuentas no existen o están inactivas." });
+    }
+
+    if ((source.currency || "USD") !== (destination.currency || "USD")) {
+      return res.status(400).json({ error: "Las cuentas deben tener la misma moneda." });
+    }
+
+    // La función SQL hace el débito/crédito dentro de una sola transacción.
+    const { data, error } = await supabase.rpc("transfer_between_accounts", {
+      p_user_id: userId,
+      p_source_account_id: sourceAccountId,
+      p_destination_account_id: destinationAccountId,
+      p_amount: amount,
+      p_description: `Transferencia de ${source.name} a ${destination.name}`,
+      p_source_message_id: null,
+    });
+
+    if (error) {
+      const message = error.message || "No se pudo completar la transferencia.";
+      const isBusinessError = /saldo insuficiente|no encontré|misma cuenta|monto|moneda|requiere cuenta/i.test(message);
+      return res.status(isBusinessError ? 422 : 500).json({ error: message });
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+    if (!result) {
+      return res.status(500).json({ error: "La transferencia no devolvió un resultado." });
+    }
+
+    return res.status(201).json({
+      data: {
+        transferId: result.transfer_id,
+        sourceAccountId: result.source_account_id,
+        destinationAccountId: result.destination_account_id,
+        amount: Number(result.amount),
+        sourceBalance: Number(result.source_balance),
+        destinationBalance: Number(result.destination_balance),
+      },
+    });
+  } catch (error) {
+    console.error("Error realizando transferencia:", error);
+    return res.status(500).json({ error: "No se pudo realizar la transferencia." });
+  }
+});
+
 router.get("/transactions", async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.userId!;
